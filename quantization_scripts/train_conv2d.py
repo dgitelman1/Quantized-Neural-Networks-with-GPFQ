@@ -7,37 +7,38 @@ from torch.utils.data import DataLoader
 import numpy as np
 import matplotlib.pyplot as plt
 
-from data_loaders import load_data_mnist, load_data_fashion_mnist
+from data_loaders import load_data_mnist, load_data_fashion_mnist, load_data_kmnist
 
-# If we need to train complicated models, then we enable GPUs.
 device = "cuda" if torch.cuda.is_available() else "cpu"
 
-class MLP(nn.Module):
+class CNN(nn.Module):
     '''
-    Add new annotations later.
+    Basic CNN to test quantization.
     '''
-    def __init__(self, input_dim, hidden_dim, out_dim):
+    def __init__(self):
         super().__init__()
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.out_dim = out_dim
-        # hidden_dim = [512, 256, 128]
-        # Define layers of MLP. Using nn.Sequential is also OK.
-        self.layer1 = nn.Linear(input_dim, hidden_dim[0], bias=True)
-        self.layer2 = nn.Linear(hidden_dim[0], hidden_dim[1], bias=True)
-        self.layer3 = nn.Linear(hidden_dim[1], hidden_dim[2], bias=True)
-        self.layer4 = nn.Linear(hidden_dim[2], out_dim, bias=True)
 
-    def forward(self, X):
-        X = X.view(-1, self.input_dim)
-        X = self.layer1(X)
-        X = F.relu(X)
-        X = self.layer2(X)
-        X = F.relu(X)
-        X = self.layer3(X)
-        X = F.relu(X)
-        X = self.layer4(X)
-        return F.log_softmax(X, dim=1)
+        # Define layers of MLP. Using nn.Sequential is also OK.
+        self.conv1 = nn.Conv2d(1, 6, 5)
+        self.conv2 = nn.Conv2d(6, 16, 5)
+        # an affine operation: y = Wx + b
+        self.fc1 = nn.Linear(256, 120)  # 5*5 from image dimension
+        self.fc2 = nn.Linear(120, 84)
+        self.fc3 = nn.Linear(84, 10)
+
+    def forward(self, x):
+        # X = X.view(-1, self.input_dim)
+        # Max pooling over a (2, 2) window
+        x = F.max_pool2d(F.relu(self.conv1(x)), (2, 2))
+        # If the size is a square, you can specify with a single number
+        x = F.max_pool2d(F.relu(self.conv2(x)), 2)
+        x = torch.flatten(x, 1) # flatten all dimensions except the batch dimension
+        x = F.relu(self.fc1(x))
+        x = F.relu(self.fc2(x))
+        x = self.fc3(x)
+        return F.log_softmax(x, dim=1)
+
+
 
 def train_mlp(train_loader, val_loader, model, loss_fn, optimizer, n_epochs):
     """
@@ -99,15 +100,15 @@ if __name__ == '__main__':
     print(f'{device} is available.')
     batch_size = 16
     input_dim = 28 * 28
-    hidden_dim = [512 * 4, 256, 128]
+    hidden_dim = [512, 256, 128]
     out_dim = 10
     n_epochs = 5
     learning_rate = 5 * 1e-4
     weight_decay = 1e-6 
     num_workers = 4  # num_workers is around 4 * num_of_GPUs
-    train_loader, val_loader, test_loader = load_data_fashion_mnist(batch_size, train_ratio=0.8, 
+    train_loader, val_loader, test_loader = load_data_kmnist(batch_size, train_ratio=0.8, 
                                                 num_workers=num_workers)
-    model = MLP(input_dim, hidden_dim, out_dim).to(device)
+    model = CNN().to(device)
     loss_fn = nn.NLLLoss()
     optimizer = optim.Adam(model.parameters(), lr=learning_rate, weight_decay=weight_decay)
     train_losses, val_losses = train_mlp(train_loader, val_loader, model, loss_fn, optimizer, n_epochs)
@@ -115,4 +116,4 @@ if __name__ == '__main__':
     predictions, labels = test_mlp(test_loader, model)
     test_accuracy = np.sum(predictions == labels) / len(labels)
     print(f'The testing accuracy is: {test_accuracy}.')
-    torch.save(model, '../models/fashion_mlp.pt')
+    torch.save(model, '../models/conv2d_kmlp.pt')
