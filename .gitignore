@@ -139,3 +139,4 @@ retraining_scripts/test.ipynb
 quantization_scripts/cache_data/*
 experiemntal_place/Experiment_kernel.ipynb
 .venv
+data/*
