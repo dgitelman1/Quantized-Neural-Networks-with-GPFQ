@@ -20,6 +20,7 @@ g = torch.Generator()
 g.manual_seed(0)
 # use above function and g to preserve reproducibility.
 
+data_dir = '../data'
 
 class Imagenet(Dataset):
     """
@@ -78,7 +79,6 @@ def data_loader(ds_name, batch_size, num_workers):
                                 num_workers=num_workers) 
 
     elif ds_name == 'CIFAR10':
-        data_dir = '../data'
 
         transform_train = transforms.Compose([
                 transforms.ToTensor(),
