@@ -4,7 +4,7 @@ import numpy as np
 import scipy.io as sio
 import os
 import pickle
-from tqdm import tqdm
+from tqdm import tqdm, trange
 
 from torchvision.models.resnet import BasicBlock as tBasicBlock
 from torchvision.models.resnet import Bottleneck as tBottleneck 
@@ -158,3 +158,57 @@ def eval_sparsity(model):
             num_of_zero += l.bias.eq(0).sum().item()
     return np.around(num_of_zero / total_param, 4)
                 
+def train_model(model, train_loader, criterion, optimizer, device, num_epochs=10):
+    g = torch.Generator()
+    g.manual_seed(42)  # Setting manual seed for reproducibility
+    model.train()
+    
+    for epoch in trange(num_epochs):
+        running_loss = 0.0
+        correct = 0
+        total = 0
+        print(f"Starting Epoch {epoch+1}")
+        for i, (inputs, labels) in tqdm(enumerate(train_loader)):
+            inputs, labels = inputs.to(device), labels.to(device)
+            
+            # Zero the parameter gradients
+            optimizer.zero_grad()
+            
+            # Forward pass
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            
+            # Backward pass and optimization
+            loss.backward()
+            optimizer.step()
+            
+            # Statistics
+            running_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
+
+        print(f'Epoch [{epoch+1}/{num_epochs}], Loss: {running_loss/len(train_loader):.4f}, '
+              f'Accuracy: {100.*correct/total:.2f}%')
+
+# Function to evaluate the model on the test dataset
+def evaluate_model(model, test_loader, criterion, device):
+    model.eval()  # Set model to evaluation mode
+    test_loss = 0.0
+    correct = 0
+    total = 0
+
+    with torch.no_grad():
+        for inputs, labels in test_loader:
+            inputs, labels = inputs.to(device), labels.to(device)
+            
+            outputs = model(inputs)
+            loss = criterion(outputs, labels)
+            
+            test_loss += loss.item()
+            _, predicted = outputs.max(1)
+            total += labels.size(0)
+            correct += predicted.eq(labels).sum().item()
+    
+    print(f'Test Loss: {test_loss/len(test_loader):.4f}, '
+          f'Accuracy: {100.*correct/total:.2f}%')

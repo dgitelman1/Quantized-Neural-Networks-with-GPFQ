@@ -1,12 +1,14 @@
 import torch
 import torchvision
 import numpy as np
+import torch.optim as optim
+import torch.nn as nn
 import os
 import csv
 import argparse
 from datetime import datetime
 from quantize_neural_net import QuantizeNeuralNet
-from utils import test_accuracy, eval_sparsity, fusion_layers_inplace
+from utils import test_accuracy, eval_sparsity, fusion_layers_inplace, train_model, evaluate_model
 from data_loaders import data_loader
 
 LOG_FILE_NAME = '../logs/Quantization_Log.csv'
@@ -52,7 +54,7 @@ def main(b, mlp_s, cnn_s, bs, mlp_per, cnn_per, l):
     cnn_scalar = cnn_s
     lamb = l
     stochastic = args.stochastic_quantization
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    device = torch.device("cuda")
     
     np.random.seed(args.seed)
     torch.manual_seed(args.seed)
@@ -74,12 +76,17 @@ def main(b, mlp_s, cnn_s, bs, mlp_per, cnn_per, l):
         }
 
     elif args.data_set == 'CIFAR10':
-        model = torch.load(os.path.join('pretrained_cifar10', args.model + '_cifar10.pt'), 
-            map_location=torch.device('cpu')).module
-
-        original_accuracy_table = {}
+        model = getattr(torchvision.models, args.model)(pretrained=False)
+        original_accuracy_table = {}    
+        model.conv1 = nn.Conv2d(3, 64, kernel_size=3, stride=1, padding=1, bias=False)
+        model.maxpool = nn.Identity()
+        model.to(device)  
+        train_loader, test_loader = data_loader(args.data_set, batch_size, args.num_worker)
+        criterion = nn.CrossEntropyLoss()
+        optimizer = optim.SGD(model.parameters(), lr=0.01, momentum=0.9, weight_decay=5e-4)
+        train_model(model, train_loader, criterion, optimizer, device, num_epochs=20)
+        evaluate_model(model, test_loader, criterion, device)
     
-    model.to(device)  
     model.eval()  # turn on the evaluation mode
 
     if args.fusion:
